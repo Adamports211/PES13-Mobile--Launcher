@@ -13,11 +13,17 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import java.util.Locale
 
 class MainActivity : Activity() {
 
-    private lateinit var status: TextView
+    private lateinit var fileNameView: TextView
+    private lateinit var fileSizeView: TextView
+    private lateinit var fileTypeView: TextView
+    private lateinit var statusView: TextView
+
     private val prefs by lazy {
         getSharedPreferences("pes13_settings", MODE_PRIVATE)
     }
@@ -25,6 +31,7 @@ class MainActivity : Activity() {
     private val green = Color.rgb(40, 220, 120)
     private val dark = Color.rgb(9, 17, 13)
     private val panel = Color.rgb(20, 34, 26)
+    private val muted = Color.rgb(175, 190, 180)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,15 +42,26 @@ class MainActivity : Activity() {
     private fun buildScreen() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(24, 32, 24, 32)
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(24, 28, 24, 24)
             setBackgroundColor(dark)
+        }
+
+        val scroll = ScrollView(this).apply {
+            fillViewport = true
+            addView(
+                root,
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+            )
         }
 
         val label = TextView(this).apply {
             text = "COMMUNITY EDITION"
             textSize = 12f
-            letterSpacing = 0.18f
+            letterSpacing = 0.16f
             setTextColor(green)
             gravity = Gravity.CENTER
         }
@@ -58,12 +76,12 @@ class MainActivity : Activity() {
         }
 
         val subtitle = TextView(this).apply {
-            text = "MOBILE LAUNCHER"
-            textSize = 15f
-            letterSpacing = 0.12f
-            setTextColor(Color.LTGRAY)
+            text = "MOBILE FILE MANAGER"
+            textSize = 14f
+            letterSpacing = 0.08f
+            setTextColor(muted)
             gravity = Gravity.CENTER
-            setPadding(0, 0, 0, 28)
+            setPadding(0, 0, 0, 26)
         }
 
         val card = LinearLayout(this).apply {
@@ -72,30 +90,33 @@ class MainActivity : Activity() {
             setBackgroundColor(panel)
         }
 
-        val fileLabel = TextView(this).apply {
+        val cardTitle = TextView(this).apply {
             text = "SELECTED GAME FILE"
             textSize = 12f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(green)
+            setPadding(0, 0, 0, 14)
         }
 
-        status = TextView(this).apply {
-            text = "No file selected"
-            textSize = 16f
-            setTextColor(Color.WHITE)
-            setPadding(0, 12, 0, 4)
-        }
+        fileNameView = makeInfoView()
+        fileSizeView = makeInfoView()
+        fileTypeView = makeInfoView()
 
-        val hint = TextView(this).apply {
-            text = "Your selection is saved on this device."
+        card.addView(cardTitle)
+        card.addView(makeFieldLabel("FILE NAME"))
+        card.addView(fileNameView)
+        card.addView(makeFieldLabel("FILE SIZE"))
+        card.addView(fileSizeView)
+        card.addView(makeFieldLabel("FILE TYPE"))
+        card.addView(fileTypeView)
+
+        statusView = TextView(this).apply {
+            text = "Choose a file to get started."
             textSize = 12f
-            setTextColor(Color.LTGRAY)
-            setPadding(0, 6, 0, 0)
+            setTextColor(muted)
+            gravity = Gravity.CENTER
+            setPadding(0, 14, 0, 8)
         }
-
-        card.addView(fileLabel)
-        card.addView(status)
-        card.addView(hint)
 
         val selectButton = Button(this).apply {
             text = "SELECT / CHANGE FILE"
@@ -112,16 +133,17 @@ class MainActivity : Activity() {
         }
 
         val footer = TextView(this).apply {
-            text = "FILE SELECTOR PROTOTYPE\nGame runtime not included."
+            text = "FILE MANAGER PROTOTYPE\nGame runtime not included."
             textSize = 12f
             setTextColor(Color.GRAY)
             gravity = Gravity.CENTER
-            setPadding(0, 24, 0, 0)
+            setPadding(0, 18, 0, 0)
         }
 
         root.addView(label)
         root.addView(title)
         root.addView(subtitle)
+
         root.addView(
             card,
             LinearLayout.LayoutParams(
@@ -135,7 +157,7 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 22 }
+            ).apply { topMargin = 20 }
         )
 
         root.addView(
@@ -146,8 +168,29 @@ class MainActivity : Activity() {
             )
         )
 
+        root.addView(statusView)
         root.addView(footer)
-        setContentView(root)
+
+        setContentView(scroll)
+    }
+
+    private fun makeFieldLabel(text: String): TextView {
+        return TextView(this).apply {
+            this.text = text
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(green)
+            setPadding(0, 10, 0, 3)
+        }
+    }
+
+    private fun makeInfoView(): TextView {
+        return TextView(this).apply {
+            text = "Not selected"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, 2)
+        }
     }
 
     private fun selectFile() {
@@ -157,6 +200,7 @@ class MainActivity : Activity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
+
         startActivityForResult(intent, 100)
     }
 
@@ -177,71 +221,151 @@ class MainActivity : Activity() {
                 (Intent.FLAG_GRANT_READ_URI_PERMISSION or
                  Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
 
-            contentResolver.takePersistableUriPermission(uri, flags)
+            if (flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0) {
+                contentResolver.takePersistableUriPermission(uri, flags)
+            }
 
-            val name = getDisplayName(uri)
+            val info = getFileInfo(uri)
+
             prefs.edit()
                 .putString("file_uri", uri.toString())
-                .putString("file_name", name)
+                .putString("file_name", info.name)
                 .apply()
 
-            showSelection(name)
-        } catch (e: SecurityException) {
-            status.text = "Permission unavailable. Please select again."
+            displayFile(info)
+            statusView.text = "File selected and saved on this device."
         } catch (e: Exception) {
-            status.text = "Could not save this file. Try another file."
+            statusView.text =
+                "Could not open this file. Please select it again."
         }
     }
 
+    private data class FileInfo(
+        val name: String,
+        val size: Long?,
+        val type: String
+    )
+
+    private fun getFileInfo(uri: Uri): FileInfo {
+        var name = "Unknown file"
+        var size: Long? = null
+
+        var cursor: Cursor? = null
+
+        try {
+            cursor = contentResolver.query(
+                uri,
+                arrayOf(
+                    OpenableColumns.DISPLAY_NAME,
+                    OpenableColumns.SIZE
+                ),
+                null,
+                null,
+                null
+            )
+
+            if (cursor != null && cursor.moveToFirst()) {
+                val nameIndex =
+                    cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+
+                if (nameIndex >= 0) {
+                    name = cursor.getString(nameIndex) ?: name
+                }
+
+                val sizeIndex =
+                    cursor.getColumnIndex(OpenableColumns.SIZE)
+
+                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+                    size = cursor.getLong(sizeIndex).takeIf { it >= 0 }
+                }
+            }
+        } catch (_: Exception) {
+            // Some file providers don't supply file details.
+        } finally {
+            cursor?.close()
+        }
+
+        val extension = name.substringAfterLast('.', "")
+            .lowercase(Locale.ROOT)
+
+        val mimeType = try {
+            contentResolver.getType(uri)
+        } catch (_: Exception) {
+            null
+        }
+
+        val type = when {
+            extension.isNotBlank() -> extension.uppercase(Locale.ROOT)
+            !mimeType.isNullOrBlank() -> mimeType
+            else -> "Unknown"
+        }
+
+        return FileInfo(name, size, type)
+    }
+
+    private fun formatSize(bytes: Long?): String {
+        if (bytes == null) return "Unavailable"
+        if (bytes < 1024) return "$bytes bytes"
+
+        val units = arrayOf("KB", "MB", "GB", "TB")
+        var value = bytes.toDouble()
+        var index = -1
+
+        do {
+            value /= 1024.0
+            index++
+        } while (value >= 1024 && index < units.lastIndex)
+
+        return String.format(
+            Locale.getDefault(),
+            "%.2f %s",
+            value,
+            units[index.coerceAtMost(units.lastIndex)]
+        )
+    }
+
+    private fun displayFile(info: FileInfo) {
+        fileNameView.text = info.name
+        fileSizeView.text = formatSize(info.size)
+        fileTypeView.text = info.type
+    }
+
     private fun restoreSelection() {
-        val savedUri = prefs.getString("file_uri", null) ?: run {
-            status.text = "No file selected"
+        val savedUri = prefs.getString("file_uri", null)
+
+        if (savedUri == null) {
+            showEmptyState()
             return
         }
 
         val uri = Uri.parse(savedUri)
+
         val hasPermission = contentResolver.persistedUriPermissions.any {
             it.uri == uri && it.isReadPermission
         }
 
         if (!hasPermission) {
-            status.text = "Permission expired. Please select the file again."
+            showEmptyState()
+            statusView.text = "Permission expired. Please select the file again."
             return
         }
 
         try {
             contentResolver.openFileDescriptor(uri, "r")?.use { }
-            showSelection(
-                prefs.getString("file_name", "Saved file") ?: "Saved file"
-            )
-        } catch (e: Exception) {
-            status.text = "File unavailable. Please select it again."
-        }
-    }
+                ?: throw Exception("File unavailable")
 
-    private fun getDisplayName(uri: Uri): String {
-        var name = "Selected file"
-        var cursor: Cursor? = null
-
-        try {
-            cursor = contentResolver.query(uri, null, null, null, null)
-            if (cursor != null && cursor.moveToFirst()) {
-                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (index >= 0) {
-                    name = cursor.getString(index) ?: name
-                }
-            }
+            displayFile(getFileInfo(uri))
+            statusView.text = "Saved selection restored."
         } catch (_: Exception) {
-            // Keep the fallback name.
-        } finally {
-            cursor?.close()
+            showEmptyState()
+            statusView.text = "File unavailable. Please select it again."
         }
-
-        return name
     }
 
-    private fun showSelection(name: String) {
-        status.text = name
+    private fun showEmptyState() {
+        fileNameView.text = "Not selected"
+        fileSizeView.text = "—"
+        fileTypeView.text = "—"
     }
 
     private fun clearSelection() {
@@ -254,11 +378,12 @@ class MainActivity : Activity() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (_: Exception) {
-                // The permission may already have expired.
+                // Permission may already have been released.
             }
         }
 
         prefs.edit().clear().apply()
-        status.text = "No file selected"
+        showEmptyState()
+        statusView.text = "Selection cleared."
     }
 }
